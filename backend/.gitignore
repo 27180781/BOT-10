@@ -1,0 +1,37 @@
+# סביבה וירטואלית של פייתון
+.venv/
+venv/
+*.venv
+
+# קבצי סביבה (מכילים סודות)
+.env*
+*.env
+
+# קבצי Cache ותוצרי ביניים של פייתון
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# קבצי מערכת הפעלה
+.DS_Store
+Thumbs.db
+
+# קבצים שנוצרו מהפרויקט הספציפי
+combined_bundle.pem
