@@ -35,7 +35,7 @@ def handle_chat():
         print(f"Received message: {user_message}")
         if not google_api_key: return jsonify({"error": "Google API Key not configured"}), 500
         try:
-            model = genai.GenerativeModel('gemini-pro')
+            model = genai.GenerativeModel('gemini-2.0-flash')
             print("--- Sending request to Gemini API ---")
             response = model.generate_content(user_message)
             print("--- Received response from Gemini API ---")
