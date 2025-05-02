@@ -114,6 +114,11 @@ else:
         engine = None # Ensure engine is None if creation failed
 
 print(f"--- After DB setup block, final engine state is: {engine} ---")
+
+# ... (סוף הפונקציה handle_chat) ...
+
+print("--- Flask routes definitions should be complete now ---") 
+# --- בלוק הרצת שרת הפיתוח ---
 # --- End Database Setup ---
 
 
