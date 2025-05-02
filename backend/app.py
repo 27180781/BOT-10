@@ -22,14 +22,12 @@ engine = None
 SessionLocal = None
 Base = declarative_base()
 
-# הגדרת מודל הנתונים - FAQ
 class FAQ(Base):
     __tablename__ = 'faqs'
     id = Column(Integer, primary_key=True, index=True)
     question = Column(String, nullable=False, index=True)
     answer = Column(String, nullable=False)
 
-# --- פונקציה נפרדת להוספת נתוני דוגמה ---
 def seed_data(db_session: Session):
     try:
         print(f"--- Attempting to seed initial data into '{FAQ.__tablename__}' table ---")
@@ -45,10 +43,40 @@ def seed_data(db_session: Session):
         print(f"--- Successfully seeded {len(new_faqs)} FAQs ---")
     except Exception as e_seed_commit:
         print(f"Error during data seeding commit: {e_seed_commit}")
-        print(traceback.format_exc()) # הדפס פרטי שגיאה
-        db_session.rollback() # בטל שינויים במקרה של שגיאה
-# --- סוף פונקציית seed_data ---
+        print(traceback.format_exc())
+        db_session.rollback()
 
+def init_db():
+    if not engine or not SessionLocal:
+        print("--- Skipping DB init because engine or SessionLocal is None ---")
+        return
+    try:
+        print(f"--- Checking if table '{FAQ.__tablename__}' exists... ---")
+        inspector = inspect(engine)
+        table_exists = inspector.has_table(FAQ.__tablename__)
+
+        if not table_exists:
+            print(f"--- Creating table '{FAQ.__tablename__}' ---")
+            Base.metadata.create_all(bind=engine)
+            print(f"--- Table '{FAQ.__tablename__}' created successfully ---")
+            seed_session: Session = SessionLocal()
+            seed_data(seed_session)
+            seed_session.close()
+        else:
+            print(f"--- Table '{FAQ.__tablename__}' already exists ---")
+            check_session: Session = SessionLocal()
+            faq_count = check_session.query(FAQ).count()
+            check_session.close()
+            print(f"--- Table '{FAQ.__tablename__}' exists with {faq_count} rows. ---")
+            if faq_count == 0:
+                 print("--- Table exists but is empty. Calling seed function. ---")
+                 seed_session: Session = SessionLocal()
+                 seed_data(seed_session)
+                 seed_session.close()
+
+    except Exception as e_init:
+        print(f"Error during DB initialization (init_db function): {e_init}")
+        print(traceback.format_exc())
 
 if not DATABASE_URL:
     print("שגיאה קריטית: משתנה הסביבה DATABASE_URL אינו מוגדר.")
@@ -59,45 +87,8 @@ else:
         print(f"--- Database engine object CREATED: {engine} ---")
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
         print("--- SessionLocal created ---")
-
-        # פונקציה לאתחול ה-DB (יצירת טבלה + קריאה ל-seeding)
-        def init_db():
-            if not engine or not SessionLocal: # בדיקה נוספת
-                print("--- Skipping DB init because engine or SessionLocal is None ---")
-                return
-            try:
-                print(f"--- Checking if table '{FAQ.__tablename__}' exists... ---")
-                inspector = inspect(engine)
-                table_exists = inspector.has_table(FAQ.__tablename__)
-
-                if not table_exists:
-                    print(f"--- Creating table '{FAQ.__tablename__}' ---")
-                    Base.metadata.create_all(bind=engine)
-                    print(f"--- Table '{FAQ.__tablename__}' created successfully ---")
-                    # קריאה ל-seeding אחרי יצירת טבלה
-                    seed_session: Session = SessionLocal()
-                    seed_data(seed_session)
-                    seed_session.close()
-                else:
-                    # אם הטבלה קיימת, בדוק אם היא ריקה ורק אז תזרע נתונים
-                    print(f"--- Table '{FAQ.__tablename__}' already exists ---")
-                    check_session: Session = SessionLocal()
-                    faq_count = check_session.query(FAQ).count()
-                    check_session.close()
-                    print(f"--- Table '{FAQ.__tablename__}' exists with {faq_count} rows. ---")
-                    if faq_count == 0:
-                         print("--- Table exists but is empty. Calling seed function. ---")
-                         seed_session: Session = SessionLocal()
-                         seed_data(seed_session) # <<< קריאה לפונקצית ה-Seeding
-                         seed_session.close()
-
-            except Exception as e_init:
-                print(f"Error during DB initialization (init_db function): {e_init}")
-                print(traceback.format_exc())
-
-        if engine:
+        if engine: # קריאה לאתחול רק אם ה-engine נוצר
              init_db()
-
     except Exception as e_engine:
         print(f"שגיאה **בזמן** יצירת engine או SessionLocal: {e_engine}")
         print(traceback.format_exc())
@@ -107,15 +98,24 @@ print(f"--- After DB setup block, final engine state is: {engine} ---")
 # --- סוף הגדרות מסד הנתונים ---
 
 
-# --- הגדרות Gemini API (ללא שינוי) ---
-# (קוד הגדרת Gemini נשאר כפי שהיה)
-# ...
+# --- הגדרות Gemini API ---
+google_api_key = None # <<<--- ודא שהשורה הזו קיימת! מאתחלת לפני ה-try
+try:
+    google_api_key_from_env = os.getenv("GOOGLE_API_KEY")
+    if not google_api_key_from_env:
+        print("שגיאה: משתנה הסביבה GOOGLE_API_KEY אינו מוגדר.")
+    else:
+        google_api_key = google_api_key_from_env # <<<--- השמה למשתנה הגלובלי
+        genai.configure(api_key=google_api_key)
+        print("--- Google Generative AI SDK configured ---")
+except Exception as e:
+    print(f"שגיאה בהגדרת Google Generative AI SDK: {e}")
+# --- סוף הגדרות Gemini API ---
+
 
 app = Flask(__name__)
 
 # --- נתיבים ---
-# (כל הנתיבים: /, /health, /db-test, /api/chat נשארים כפי שהיו בגרסה הקודמת)
-# ...
 @app.route('/')
 def home(): return "Hello from Chatbot Backend!"
 @app.route('/health')
@@ -147,7 +147,10 @@ def handle_chat():
         print(f"Error parsing request JSON: {e}")
         return jsonify({"error": "Invalid request body"}), 400
 
-    if not google_api_key: return jsonify({"error": "Google API Key not configured"}), 500
+    # <<<--- כאן היתה השגיאה. המשתנה הגלובלי google_api_key אמור להיות זמין כאן
+    if not google_api_key:
+        print("--- ERROR: google_api_key is None or not defined when checking in handle_chat! ---")
+        return jsonify({"error": "Google API Key not configured properly on server startup."}), 500
 
     # ---- שלב 1: שליפת הקשר (Context) ממסד הנתונים ----
     context = "אין מידע נוסף מהמאגר." # ברירת מחדל
@@ -183,7 +186,7 @@ def handle_chat():
     {user_message}
     """
     final_prompt = prompt_template
-    print(f"--- Final prompt for Gemini:\n{final_prompt}")
+    print(f"--- Final prompt for Gemini:\n{final_prompt[:500]}...") # הדפס רק חלק מהפרומפט הארוך
 
     # ---- שלב 3: קריאה ל-Gemini עם ה-Prompt המורחב ----
     try:
