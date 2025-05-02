@@ -1,0 +1,76 @@
+/* עיצוב בסיסי כללי */
+body {
+    font-family: Assistant, Arial, sans-serif; /* פונט עברי נעים */
+    margin: 20px;
+    background-color: #f4f4f4;
+}
+
+h1 {
+    text-align: center;
+    color: #333;
+}
+
+/* עיצוב תיבת הצ'אט */
+#chatbox {
+    height: 400px;
+    border: 1px solid #ccc;
+    overflow-y: scroll; /* מאפשר גלילה אם יש הרבה הודעות */
+    padding: 10px;
+    background-color: #fff;
+    margin-bottom: 15px;
+    display: flex; /* כדי שהודעות חדשות יהיו למטה */
+    flex-direction: column; /* מסדר הודעות אחת מתחת לשניה */
+}
+
+/* עיצוב כללי להודעות */
+.message {
+    margin-bottom: 10px;
+    padding: 8px 12px;
+    border-radius: 15px;
+    max-width: 70%;
+    word-wrap: break-word; /* שובר מילים ארוכות */
+}
+
+/* עיצוב הודעת משתמש */
+.user-message {
+    background-color: #dcf8c6; /* רקע ירוק בהיר */
+    align-self: flex-start; /* מצמיד הודעות משתמש לשמאל (ב-RTL) */
+    margin-left: auto; /* דוחף ימינה (ב-RTL) */
+    border-bottom-left-radius: 0;
+}
+
+/* עיצוב הודעת בוט */
+.bot-message {
+    background-color: #e0e0e0; /* רקע אפור בהיר */
+    align-self: flex-end; /* מצמיד הודעות בוט לימין (ב-RTL) */
+    margin-right: auto; /* דוחף שמאלה (ב-RTL) */
+    border-bottom-right-radius: 0;
+}
+
+/* עיצוב אזור הקלט */
+#inputArea {
+    display: flex; /* מסדר את התיבה והכפתור בשורה */
+    border-top: 1px solid #ccc;
+    padding-top: 15px;
+}
+
+#userInput {
+    flex-grow: 1; /* נותן לתיבת הטקסט לתפוס את רוב הרוחב */
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    margin-left: 10px; /* מרווח קטן משמאל לכפתור (ב-RTL) */
+}
+
+#sendButton {
+    padding: 10px 15px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer; /* משנה את סמן העכבר ל"יד" */
+}
+
+#sendButton:hover {
+    background-color: #0056b3; /* שינוי צבע במעבר עכבר */
+}
