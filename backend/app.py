@@ -20,9 +20,8 @@ print(f"--- Value read for DATABASE_URL: '{DATABASE_URL}' ---")
 
 engine = None
 SessionLocal = None
-Base = declarative_base() # הגדרת Base כאן כדי שהמחלקה FAQ תכיר אותו
+Base = declarative_base()
 
-# הגדרת מודל הנתונים - FAQ
 class FAQ(Base):
     __tablename__ = 'faqs'
     id = Column(Integer, primary_key=True, index=True)
@@ -36,11 +35,9 @@ else:
         print(f"--- Attempting create_engine with URL: '{DATABASE_URL}' ---")
         engine = create_engine(DATABASE_URL)
         print(f"--- Database engine object CREATED: {engine} ---")
-
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
         print("--- SessionLocal created ---")
 
-        # פונקציה ליצירת הטבלה והוספת נתונים ראשוניים (seeding)
         def init_db():
             if not engine:
                 print("--- Skipping DB init because engine is None ---")
@@ -50,12 +47,11 @@ else:
                 inspector = inspect(engine)
                 if not inspector.has_table(FAQ.__tablename__):
                     print(f"--- Creating table '{FAQ.__tablename__}' ---")
-                    Base.metadata.create_all(bind=engine) # יוצר את הטבלה
+                    Base.metadata.create_all(bind=engine)
                     print(f"--- Table '{FAQ.__tablename__}' created successfully ---")
 
-                    # ---- הוספנו כאן את ה-Seeding ----
+                    # ---- Seeding ----
                     print(f"--- Seeding initial data into '{FAQ.__tablename__}' table ---")
-                    # פתיחת session זמני רק לצורך ה-seeding
                     seed_session: Session = SessionLocal()
                     try:
                         sample_faqs = [
@@ -70,20 +66,25 @@ else:
                         print(f"--- Successfully seeded {len(new_faqs)} FAQs ---")
                     except Exception as e_seed_commit:
                         print(f"Error during data seeding commit: {e_seed_commit}")
-                        seed_session.rollback() # בטל שינויים במקרה של שגיאה
+                        seed_session.rollback()
                     finally:
-                        seed_session.close() # תמיד סגור את ה-session
-                    # ---- סוף ה-Seeding ----
-
+                        seed_session.close()
+                    # ---- End Seeding ----
                 else:
-                    print(f"--- Table '{FAQ.__tablename__}' already exists ---")
-                    # (אפשר להוסיף כאן בדיקה אם רוצים לעדכן נתונים קיימים, אבל כרגע נשאיר כך)
+                    # בדוק אם הטבלה ריקה למרות שהיא קיימת
+                    check_session: Session = SessionLocal()
+                    faq_count = check_session.query(FAQ).count()
+                    check_session.close()
+                    print(f"--- Table '{FAQ.__tablename__}' already exists with {faq_count} rows. ---")
+                    if faq_count == 0:
+                         print("--- Table exists but is empty. Attempting to seed again. ---")
+                         # אפשר להוסיף כאן שוב את לוגיקת ה-seeding אם רוצים לנסות למלא טבלה קיימת וריקה
+                         # כרגע נשאיר את זה כך, ה-Seeding ירוץ רק אם הטבלה לא קיימת כלל
 
             except Exception as e_init:
                 print(f"Error during DB initialization (init_db function): {e_init}")
                 print(traceback.format_exc())
 
-        # קריאה לפונקציה בעת עליית האפליקציה רק אם engine נוצר
         if engine:
              init_db()
 
@@ -97,6 +98,7 @@ print(f"--- After DB setup block, final engine state is: {engine} ---")
 
 
 # --- הגדרות Gemini API (ללא שינוי) ---
+# (קוד הגדרת Gemini נשאר כפי שהיה)
 google_api_key = None
 try:
     google_api_key_from_env = os.getenv("GOOGLE_API_KEY")
@@ -110,7 +112,6 @@ except Exception as e:
     print(f"שגיאה בהגדרת Google Generative AI SDK: {e}")
 # --- סוף הגדרות Gemini API ---
 
-
 app = Flask(__name__)
 
 # --- נתיבים ---
@@ -118,9 +119,9 @@ app = Flask(__name__)
 def home(): return "Hello from Chatbot Backend!"
 @app.route('/health')
 def health_check(): return jsonify({"status": "OK", "message": "Backend is running"}), 200
-
 @app.route('/db-test')
 def db_test():
+    # (קוד db_test נשאר כפי שהיה)
     print(f"--- Reached /db-test route. Engine state: {engine} ---")
     if not engine or not SessionLocal:
         return jsonify({"status": "Error", "message": "Database connection not configured properly or engine is None."}), 500
@@ -134,29 +135,75 @@ def db_test():
     finally:
         db.close()
 
+# --- נתיב API לטיפול בצ'אט - *** מעודכן עם RAG בסיסי *** ---
 @app.route('/api/chat', methods=['POST'])
 def handle_chat():
-    # --- קוד השיחה נשאר כפי שהיה - עדיין לא משתמש ב-DB ---
+    # קבלת הודעת המשתמש - ללא שינוי
     try:
         data = request.json
         if not data or 'message' not in data: return jsonify({"error": "Missing 'message' in request body"}), 400
         user_message = data['message']
         print(f"Received message: {user_message}")
-        if not google_api_key: return jsonify({"error": "Google API Key not configured"}), 500
-        try:
-            model = genai.GenerativeModel('gemini-2.0-flash') # או gemini-1.5-flash-latest
-            print("--- Sending request to Gemini API ---")
-            response = model.generate_content(user_message)
-            print("--- Received response from Gemini API ---")
-            llm_reply = response.text
-        except Exception as e:
-            print(f"Error calling Gemini API: {e}")
-            return jsonify({"error": f"Failed to get response from LLM: {str(e)}"}), 500
-        return jsonify({'reply': llm_reply})
     except Exception as e:
-        print(f"Error handling chat request: {e}")
-        return jsonify({"error": "An internal error occurred"}), 500
+        print(f"Error parsing request JSON: {e}")
+        return jsonify({"error": "Invalid request body"}), 400
 
+    # בדיקת תקינות API KEY - ללא שינוי
+    if not google_api_key: return jsonify({"error": "Google API Key not configured"}), 500
+
+    # ---- שלב 1: שליפת הקשר (Context) ממסד הנתונים ----
+    context = "אין מידע נוסף מהמאגר." # ברירת מחדל
+    retrieved_faqs = []
+    if engine and SessionLocal: # ודא שהחיבור ל-DB תקין
+        db: Session = SessionLocal()
+        try:
+            print(f"--- Retrieving FAQs from DB for RAG ---")
+            # שליפה פשוטה של *כל* ה-FAQs כרגע
+            retrieved_faqs = db.query(FAQ).all()
+            print(f"--- Retrieved {len(retrieved_faqs)} FAQs ---")
+        except Exception as e_query:
+            print(f"Error retrieving FAQs from DB: {e_query}")
+            # לא נעצור את הבקשה אם ה-DB נכשל, פשוט נמשיך בלי הקשר
+        finally:
+            db.close()
+
+    # ---- שלב 2: בניית ה-Prompt המורחב ----
+    if retrieved_faqs: # אם הצלחנו לשלוף משהו
+        context_list = []
+        for faq in retrieved_faqs:
+            context_list.append(f"שאלה נפוצה: {faq.question}\nתשובה: {faq.answer}")
+        context = "\n\n".join(context_list)
+
+    # הרכבת ההנחיה המלאה ל-Gemini
+    # (אפשר לשחק עם הנוסח של ההנחיה הזו כדי לקבל תוצאות טובות יותר)
+    prompt_template = f"""
+    בהתבסס על המידע הבא מהשאלות הנפוצות של העסק, ענה על שאלת המשתמש.
+    אם המידע לא עוזר לענות על השאלה, ענה כמיטב יכולתך על בסיס הידע הכללי שלך.
+
+    מידע מהשאלות הנפוצות:
+    ---
+    {context}
+    ---
+
+    שאלת המשתמש:
+    {user_message}
+    """
+    final_prompt = prompt_template
+    print(f"--- Final prompt for Gemini:\n{final_prompt}") # הדפסה לדיבוג
+
+    # ---- שלב 3: קריאה ל-Gemini עם ה-Prompt המורחב ----
+    try:
+        model = genai.GenerativeModel('gemini-2.0-flash') # או gemini-1.5-flash-latest
+        print("--- Sending AUGMENTED request to Gemini API ---")
+        response = model.generate_content(final_prompt) # שולחים את הפרומפט שבנינו
+        print("--- Received response from Gemini API ---")
+        llm_reply = response.text
+    except Exception as e:
+        print(f"Error calling Gemini API: {e}")
+        return jsonify({"error": f"Failed to get response from LLM: {str(e)}"}), 500
+
+    # החזרת התשובה למשתמש - ללא שינוי
+    return jsonify({'reply': llm_reply})
 
 # --- בלוק הרצת שרת הפיתוח ---
 if __name__ == '__main__':
