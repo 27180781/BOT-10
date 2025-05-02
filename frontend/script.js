@@ -1,71 +1,98 @@
-// קבלת הפניות לאלמנטים ב-HTML
+// קבלת הפניות לאלמנטים ב-HTML (ללא שינוי)
 const chatbox = document.getElementById('chatbox');
 const userInput = document.getElementById('userInput');
 const sendButton = document.getElementById('sendButton');
 
-// הוספת מאזין לאירוע לחיצה על הכפתור
-sendButton.addEventListener('click', sendMessage);
+// כתובת ה-API שלנו ב-Render (החלף אם הכתובת שלך שונה)
+const API_URL = 'https://bot-y8ug.onrender.com/api/chat';
 
-// הוספת מאזין לאירוע לחיצה על Enter בתיבת הטקסט
+// הוספת מאזינים לאירועים (ללא שינוי)
+sendButton.addEventListener('click', sendMessage);
 userInput.addEventListener('keypress', function (e) {
-    // קוד 13 זה Enter
     if (e.key === 'Enter' || e.keyCode === 13) {
         sendMessage();
     }
 });
 
-// פונקציה לשליחת ההודעה (כרגע רק מציגה מקומית)
+// פונקציה לשליחת ההודעה (עדכון עיקרי כאן)
 function sendMessage() {
-    const userMessage = userInput.value.trim(); // קבלת הטקסט והסרת רווחים מיותרים
-
-    // בדוק שההודעה לא ריקה
+    const userMessage = userInput.value.trim();
     if (userMessage === "") {
-        return; // אל תעשה כלום אם אין טקסט
+        return;
     }
 
-    // 1. הצג את הודעת המשתמש בתיבת הצ'אט
+    // 1. הצג את הודעת המשתמש
     displayMessage('user', userMessage);
 
     // 2. נקה את תיבת הקלט
     userInput.value = "";
 
-    // 3. כאן בעתיד: שלח את ההודעה לשרת וקבל תשובה מהבוט
-    // קריאה לפונקציה שתשלח את הבקשה ל-API
+    // **** 3. שלח את ההודעה לשרת וטפל בתשובה ****
     getBotResponse(userMessage);
 }
 
-// פונקציה שתטפל בקבלת התשובה מהבוט (כרגע מדמה תשובה)
-function getBotResponse(userMessage) {
-    console.log("Sending to backend (not really yet):", userMessage); // הדפסה לקונסול בינתיים
+// פונקציה *מעודכנת* שמבצעת קריאת API לשרת
+async function getBotResponse(userMessage) {
+    // (אופציונלי) הצג הודעת "הבוט מקליד..."
+    const typingIndicator = displayMessage('bot', 'הבוט חושב...');
 
-    // **** כאן נכניס את הקוד ששולח בקשה ל-API ב-Render ****
-    // **** ופונקציה שתטפל בתשובה שתתקבל ****
+    try {
+        // בצע קריאת POST ל-API עם fetch
+        const response = await fetch(API_URL, {
+            method: 'POST', // סוג הבקשה
+            headers: {
+                'Content-Type': 'application/json' // מציין שאנחנו שולחים JSON
+            },
+            body: JSON.stringify({ message: userMessage }) // הופך את האובייקט למחרוזת JSON
+        });
 
-    // הדמיית תשובה מהבוט אחרי זמן קצר
-    setTimeout(() => {
-        const botMessage = "קיבלתי: '" + userMessage + "'. אני עדיין לא מחובר לשרת...";
-        displayMessage('bot', botMessage);
-    }, 500); // השהייה של חצי שניה
+        // הסר את הודעת "הבוט מקליד..."
+        chatbox.removeChild(typingIndicator);
+
+        // בדוק אם הבקשה הצליחה (סטטוס 2xx)
+        if (!response.ok) {
+            // אם השרת החזיר שגיאה (כמו 500 או 400)
+            const errorData = await response.json().catch(() => ({ error: "תשובה לא תקינה מהשרת" })); // נסה לקרוא שגיאת JSON, או צור אחת
+            console.error('Server Error:', response.status, errorData);
+            displayMessage('bot', `אופס! קרתה שגיאה בשרת: ${errorData.error || response.statusText}`);
+            return;
+        }
+
+        // קבל את התשובה כ-JSON
+        const data = await response.json();
+
+        // הצג את התשובה של הבוט
+        if (data.reply) {
+            displayMessage('bot', data.reply);
+        } else {
+            displayMessage('bot', 'קיבלתי תשובה לא צפויה מהשרת.');
+        }
+
+    } catch (error) {
+        // הסר את הודעת "הבוט מקליד..." גם במקרה של שגיאה
+        if (typingIndicator.parentNode === chatbox) { // בדוק אם האלמנט עדיין קיים
+             chatbox.removeChild(typingIndicator);
+        }
+        // אם קרתה שגיאת רשת או שגיאה אחרת בתהליך
+        console.error('Fetch Error:', error);
+        displayMessage('bot', 'אופס! נראה שיש בעיית תקשורת עם השרת.');
+    }
 }
 
-// פונקציה להצגת הודעה בתיבת הצ'אט
+// פונקציה להצגת הודעה (ללא שינוי)
 function displayMessage(sender, message) {
-    const messageElement = document.createElement('div'); // יצירת אלמנט div חדש
-    messageElement.classList.add('message'); // הוספת קלאס כללי
-
-    // הוספת קלאס ספציפי לפי השולח (user או bot) לעיצוב שונה
+    const messageElement = document.createElement('div');
+    messageElement.classList.add('message');
     if (sender === 'user') {
         messageElement.classList.add('user-message');
     } else {
         messageElement.classList.add('bot-message');
     }
-
-    messageElement.textContent = message; // הכנסת טקסט ההודעה לאלמנט
-    chatbox.appendChild(messageElement); // הוספת האלמנט לתיבת הצ'אט
-
-    // גלילה אוטומטית לתחתית תיבת הצ'אט כדי לראות את ההודעה החדשה
+    messageElement.textContent = message;
+    chatbox.appendChild(messageElement);
     chatbox.scrollTop = chatbox.scrollHeight;
+    return messageElement; // החזרת האלמנט שימושי למחוון ההקלדה
 }
 
-// (אופציונלי) הודעת פתיחה
+// הודעת פתיחה (ללא שינוי)
 displayMessage('bot', 'שלום! אני הבוט העסקי שלך. איך אני יכול לעזור?');
