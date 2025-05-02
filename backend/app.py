@@ -14,28 +14,26 @@ load_dotenv()
 
 print("--- Flask app starting ---")
 
-# --- הגדרות מסד הנתונים ---
+# --- הגדרות מסד הנתונים (ללא שינוי מהגרסה הקודמת) ---
 DATABASE_URL = os.getenv("DATABASE_URL")
 print(f"--- Value read for DATABASE_URL: '{DATABASE_URL}' ---")
-
 engine = None
 SessionLocal = None
 Base = declarative_base()
-
 class FAQ(Base):
     __tablename__ = 'faqs'
     id = Column(Integer, primary_key=True, index=True)
     question = Column(String, nullable=False, index=True)
     answer = Column(String, nullable=False)
-
 def seed_data(db_session: Session):
+    # ... (פונקציית seed_data ללא שינוי) ...
     try:
         print(f"--- Attempting to seed initial data into '{FAQ.__tablename__}' table ---")
         sample_faqs = [
-            {'question': 'מהן שעות הפעילות שלכם?', 'answer': 'אנחנו פתוחים בימים א-ה בין השעות 09:00 בבוקר ל-17:00 אחר הצהריים.'},
-            {'question': 'מה הכתובת של העסק?', 'answer': 'הכתובת שלנו היא רחוב הדוגמא 12, תל אביב.'},
-            {'question': 'איך אפשר ליצור קשר?', 'answer': 'ניתן ליצור קשר בטלפון 03-1234567 או במייל contact@example.com.'},
-            {'question': 'האם אתם פתוחים ביום שישי?', 'answer': 'לא, אנחנו סגורים בסופי שבוע (שישי ושבת).'}
+             {'question': 'מהן שעות הפעילות שלכם?', 'answer': 'אנחנו פתוחים בימים א-ה בין השעות 09:00 בבוקר ל-17:00 אחר הצהריים.'},
+             {'question': 'מה הכתובת של העסק?', 'answer': 'הכתובת שלנו היא רחוב הדוגמא 12, תל אביב.'},
+             {'question': 'איך אפשר ליצור קשר?', 'answer': 'ניתן ליצור קשר בטלפון 03-1234567 או במייל contact@example.com.'},
+             {'question': 'האם אתם פתוחים ביום שישי?', 'answer': 'לא, אנחנו סגורים בסופי שבוע (שישי ושבת).'}
         ]
         new_faqs = [FAQ(question=item['question'], answer=item['answer']) for item in sample_faqs]
         db_session.add_all(new_faqs)
@@ -45,8 +43,8 @@ def seed_data(db_session: Session):
         print(f"Error during data seeding commit: {e_seed_commit}")
         print(traceback.format_exc())
         db_session.rollback()
-
 def init_db():
+     # ... (פונקציית init_db ללא שינוי) ...
     if not engine or not SessionLocal:
         print("--- Skipping DB init because engine or SessionLocal is None ---")
         return
@@ -54,7 +52,6 @@ def init_db():
         print(f"--- Checking if table '{FAQ.__tablename__}' exists... ---")
         inspector = inspect(engine)
         table_exists = inspector.has_table(FAQ.__tablename__)
-
         if not table_exists:
             print(f"--- Creating table '{FAQ.__tablename__}' ---")
             Base.metadata.create_all(bind=engine)
@@ -73,7 +70,6 @@ def init_db():
                  seed_session: Session = SessionLocal()
                  seed_data(seed_session)
                  seed_session.close()
-
     except Exception as e_init:
         print(f"Error during DB initialization (init_db function): {e_init}")
         print(traceback.format_exc())
@@ -87,29 +83,32 @@ else:
         print(f"--- Database engine object CREATED: {engine} ---")
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
         print("--- SessionLocal created ---")
-        if engine: # קריאה לאתחול רק אם ה-engine נוצר
-             init_db()
+        if engine: init_db()
     except Exception as e_engine:
         print(f"שגיאה **בזמן** יצירת engine או SessionLocal: {e_engine}")
         print(traceback.format_exc())
         engine = None
-
 print(f"--- After DB setup block, final engine state is: {engine} ---")
 # --- סוף הגדרות מסד הנתונים ---
 
 
 # --- הגדרות Gemini API ---
-google_api_key = None # <<<--- ודא שהשורה הזו קיימת! מאתחלת לפני ה-try
+google_api_key = None
+gemini_model = None # <<<--- משתנה גלובלי לאובייקט המודל
+chat_session = None # <<<--- משתנה גלובלי לאובייקט השיחה היחיד
 try:
     google_api_key_from_env = os.getenv("GOOGLE_API_KEY")
     if not google_api_key_from_env:
         print("שגיאה: משתנה הסביבה GOOGLE_API_KEY אינו מוגדר.")
     else:
-        google_api_key = google_api_key_from_env # <<<--- השמה למשתנה הגלובלי
+        google_api_key = google_api_key_from_env
         genai.configure(api_key=google_api_key)
-        print("--- Google Generative AI SDK configured ---")
+        # ניצור את אובייקט המודל פעם אחת כאן
+        model_name = 'gemini-2.0-flash' # או gemini-1.5-flash-latest
+        gemini_model = genai.GenerativeModel(model_name)
+        print(f"--- Google Generative AI SDK configured with model: {model_name} ---")
 except Exception as e:
-    print(f"שגיאה בהגדרת Google Generative AI SDK: {e}")
+    print(f"שגיאה בהגדרת Google Generative AI SDK או המודל: {e}")
 # --- סוף הגדרות Gemini API ---
 
 
@@ -120,12 +119,11 @@ app = Flask(__name__)
 def home(): return "Hello from Chatbot Backend!"
 @app.route('/health')
 def health_check(): return jsonify({"status": "OK", "message": "Backend is running"}), 200
-
 @app.route('/db-test')
 def db_test():
+    # (ללא שינוי)
     print(f"--- Reached /db-test route. Engine state: {engine} ---")
-    if not engine or not SessionLocal:
-        return jsonify({"status": "Error", "message": "Database connection not configured properly or engine is None."}), 500
+    if not engine or not SessionLocal: return jsonify({"status": "Error", "message": "Database connection not configured properly or engine is None."}), 500
     db: Session = SessionLocal()
     try:
         faq_count = db.query(FAQ).count()
@@ -136,8 +134,12 @@ def db_test():
     finally:
         db.close()
 
+# --- נתיב API לטיפול בצ'אט - *** מעודכן לשיחה מתמשכת + RAG *** ---
 @app.route('/api/chat', methods=['POST'])
 def handle_chat():
+    global chat_session # נאפשר לפונקציה לשנות את המשתנה הגלובלי
+
+    # קבלת הודעת המשתמש
     try:
         data = request.json
         if not data or 'message' not in data: return jsonify({"error": "Missing 'message' in request body"}), 400
@@ -147,13 +149,18 @@ def handle_chat():
         print(f"Error parsing request JSON: {e}")
         return jsonify({"error": "Invalid request body"}), 400
 
-    # <<<--- כאן היתה השגיאה. המשתנה הגלובלי google_api_key אמור להיות זמין כאן
-    if not google_api_key:
-        print("--- ERROR: google_api_key is None or not defined when checking in handle_chat! ---")
-        return jsonify({"error": "Google API Key not configured properly on server startup."}), 500
+    # בדיקת תקינות API KEY והמודל
+    if not google_api_key: return jsonify({"error": "Google API Key not configured"}), 500
+    if not gemini_model: return jsonify({"error": "Gemini model not initialized"}), 500
 
-    # ---- שלב 1: שליפת הקשר (Context) ממסד הנתונים ----
-    context = "אין מידע נוסף מהמאגר." # ברירת מחדל
+    # אתחול השיחה אם זו הפעם הראשונה
+    if chat_session is None:
+        print("--- Starting new chat session ---")
+        # אפשר להוסיף כאן history התחלתי או system prompt אם רוצים
+        chat_session = gemini_model.start_chat(history=[])
+
+    # ---- שלב 1: שליפת הקשר (Context) ממסד הנתונים (כמו קודם) ----
+    context = "" # נתחיל עם הקשר ריק
     retrieved_faqs = []
     if engine and SessionLocal:
         db: Session = SessionLocal()
@@ -161,44 +168,35 @@ def handle_chat():
             print(f"--- Retrieving FAQs from DB for RAG ---")
             retrieved_faqs = db.query(FAQ).all()
             print(f"--- Retrieved {len(retrieved_faqs)} FAQs ---")
+            if retrieved_faqs:
+                context_list = []
+                for faq in retrieved_faqs:
+                    context_list.append(f"Q: {faq.question}\nA: {faq.answer}")
+                context = "Context from FAQs:\n---\n" + "\n\n".join(context_list) + "\n---"
         except Exception as e_query:
             print(f"Error retrieving FAQs from DB: {e_query}")
         finally:
             db.close()
 
-    # ---- שלב 2: בניית ה-Prompt המורחב ----
-    if retrieved_faqs:
-        context_list = []
-        for faq in retrieved_faqs:
-            context_list.append(f"שאלה נפוצה: {faq.question}\nתשובה: {faq.answer}")
-        context = "\n\n".join(context_list)
+    # ---- שלב 2: הרכבת ההודעה לג'מיני (כולל ההקשר) ----
+    # נוסיף את ההקשר בתחילת ההודעה שנשלחת
+    message_with_context = f"{context}\n\nUser message: {user_message}"
+    print(f"--- Sending message to chat session:\n{message_with_context[:500]}...")
 
-    prompt_template = f"""
-    בהתבסס על המידע הבא מהשאלות הנפוצות של העסק, ענה על שאלת המשתמש.
-    אם המידע לא עוזר לענות על השאלה, ענה כמיטב יכולתך על בסיס הידע הכללי שלך.
-
-    מידע מהשאלות הנפוצות:
-    ---
-    {context}
-    ---
-
-    שאלת המשתמש:
-    {user_message}
-    """
-    final_prompt = prompt_template
-    print(f"--- Final prompt for Gemini:\n{final_prompt[:500]}...") # הדפס רק חלק מהפרומפט הארוך
-
-    # ---- שלב 3: קריאה ל-Gemini עם ה-Prompt המורחב ----
+    # ---- שלב 3: שליחת ההודעה ל-Chat Session וקבלת תשובה ----
     try:
-        model = genai.GenerativeModel('gemini-2.0-flash') # או gemini-1.5-flash-latest
-        print("--- Sending AUGMENTED request to Gemini API ---")
-        response = model.generate_content(final_prompt)
-        print("--- Received response from Gemini API ---")
+        print("--- Sending message via chat.send_message() ---")
+        # שולחים לשיחה הפעילה, היא מנהלת את ההיסטוריה
+        response = chat_session.send_message(message_with_context)
+        print("--- Received response from chat session ---")
         llm_reply = response.text
     except Exception as e:
-        print(f"Error calling Gemini API: {e}")
-        return jsonify({"error": f"Failed to get response from LLM: {str(e)}"}), 500
+        print(f"Error sending message via chat session: {e}")
+        # חשוב: אם יש שגיאה, כדאי לאפס את השיחה כדי שהבקשה הבאה תתחיל מחדש
+        chat_session = None
+        return jsonify({"error": f"Failed to get response from LLM chat session: {str(e)}"}), 500
 
+    # החזרת התשובה למשתמש
     return jsonify({'reply': llm_reply})
 
 
