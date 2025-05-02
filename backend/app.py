@@ -4,24 +4,30 @@ import os
 import google.generativeai as genai
 from flask import Flask, jsonify, request
 from dotenv import load_dotenv
-# --- ייבואים חדשים ---
 from sqlalchemy import create_engine, text, inspect, Column, Integer, String, MetaData
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
-import certifi # נשאיר למקרה שנצטרך בעתיד, לא מזיק
+import certifi
 import traceback
-# --------------------
 
 # טען משתני סביבה מקובץ .env
 load_dotenv()
 
 print("--- Flask app starting ---")
 
-# --- הגדרות מסד הנתונים עם הדפסות נוספות ---
+# --- הגדרות מסד הנתונים ---
 DATABASE_URL = os.getenv("DATABASE_URL")
-print(f"--- Value read for DATABASE_URL: '{DATABASE_URL}' ---") # חשוב לראות מה הערך שנקרא
+print(f"--- Value read for DATABASE_URL: '{DATABASE_URL}' ---")
 
 engine = None
 SessionLocal = None
+Base = declarative_base() # הגדרת Base כאן כדי שהמחלקה FAQ תכיר אותו
+
+# הגדרת מודל הנתונים - FAQ
+class FAQ(Base):
+    __tablename__ = 'faqs'
+    id = Column(Integer, primary_key=True, index=True)
+    question = Column(String, nullable=False, index=True)
+    answer = Column(String, nullable=False)
 
 if not DATABASE_URL:
     print("שגיאה קריטית: משתנה הסביבה DATABASE_URL אינו מוגדר.")
@@ -34,15 +40,8 @@ else:
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
         print("--- SessionLocal created ---")
 
-        Base = declarative_base()
-        class FAQ(Base):
-            __tablename__ = 'faqs'
-            id = Column(Integer, primary_key=True, index=True)
-            question = Column(String, nullable=False, index=True)
-            answer = Column(String, nullable=False)
-
+        # פונקציה ליצירת הטבלה והוספת נתונים ראשוניים (seeding)
         def init_db():
-            # חשוב לוודא ש-engine נוצר לפני שמנסים להשתמש בו
             if not engine:
                 print("--- Skipping DB init because engine is None ---")
                 return
@@ -51,10 +50,35 @@ else:
                 inspector = inspect(engine)
                 if not inspector.has_table(FAQ.__tablename__):
                     print(f"--- Creating table '{FAQ.__tablename__}' ---")
-                    Base.metadata.create_all(bind=engine)
+                    Base.metadata.create_all(bind=engine) # יוצר את הטבלה
                     print(f"--- Table '{FAQ.__tablename__}' created successfully ---")
+
+                    # ---- הוספנו כאן את ה-Seeding ----
+                    print(f"--- Seeding initial data into '{FAQ.__tablename__}' table ---")
+                    # פתיחת session זמני רק לצורך ה-seeding
+                    seed_session: Session = SessionLocal()
+                    try:
+                        sample_faqs = [
+                            {'question': 'מהן שעות הפעילות שלכם?', 'answer': 'אנחנו פתוחים בימים א-ה בין השעות 09:00 בבוקר ל-17:00 אחר הצהריים.'},
+                            {'question': 'מה הכתובת של העסק?', 'answer': 'הכתובת שלנו היא רחוב הדוגמא 12, תל אביב.'},
+                            {'question': 'איך אפשר ליצור קשר?', 'answer': 'ניתן ליצור קשר בטלפון 03-1234567 או במייל contact@example.com.'},
+                            {'question': 'האם אתם פתוחים ביום שישי?', 'answer': 'לא, אנחנו סגורים בסופי שבוע (שישי ושבת).'}
+                        ]
+                        new_faqs = [FAQ(question=item['question'], answer=item['answer']) for item in sample_faqs]
+                        seed_session.add_all(new_faqs)
+                        seed_session.commit()
+                        print(f"--- Successfully seeded {len(new_faqs)} FAQs ---")
+                    except Exception as e_seed_commit:
+                        print(f"Error during data seeding commit: {e_seed_commit}")
+                        seed_session.rollback() # בטל שינויים במקרה של שגיאה
+                    finally:
+                        seed_session.close() # תמיד סגור את ה-session
+                    # ---- סוף ה-Seeding ----
+
                 else:
                     print(f"--- Table '{FAQ.__tablename__}' already exists ---")
+                    # (אפשר להוסיף כאן בדיקה אם רוצים לעדכן נתונים קיימים, אבל כרגע נשאיר כך)
+
             except Exception as e_init:
                 print(f"Error during DB initialization (init_db function): {e_init}")
                 print(traceback.format_exc())
@@ -72,7 +96,7 @@ print(f"--- After DB setup block, final engine state is: {engine} ---")
 # --- סוף הגדרות מסד הנתונים ---
 
 
-# --- הגדרות Gemini API ---
+# --- הגדרות Gemini API (ללא שינוי) ---
 google_api_key = None
 try:
     google_api_key_from_env = os.getenv("GOOGLE_API_KEY")
@@ -112,7 +136,7 @@ def db_test():
 
 @app.route('/api/chat', methods=['POST'])
 def handle_chat():
-    # ... (קוד כפי שהיה, ודא שהוא משתמש במודל שעבד לך כמו gemini-2.0-flash) ...
+    # --- קוד השיחה נשאר כפי שהיה - עדיין לא משתמש ב-DB ---
     try:
         data = request.json
         if not data or 'message' not in data: return jsonify({"error": "Missing 'message' in request body"}), 400
@@ -120,9 +144,7 @@ def handle_chat():
         print(f"Received message: {user_message}")
         if not google_api_key: return jsonify({"error": "Google API Key not configured"}), 500
         try:
-            # --- ודא ששם המודל הוא זה שעבד לך קודם ---
-            model = genai.GenerativeModel('gemini-2.0-flash')
-
+            model = genai.GenerativeModel('gemini-2.0-flash') # או gemini-1.5-flash-latest
             print("--- Sending request to Gemini API ---")
             response = model.generate_content(user_message)
             print("--- Received response from Gemini API ---")
@@ -134,6 +156,7 @@ def handle_chat():
     except Exception as e:
         print(f"Error handling chat request: {e}")
         return jsonify({"error": "An internal error occurred"}), 500
+
 
 # --- בלוק הרצת שרת הפיתוח ---
 if __name__ == '__main__':
