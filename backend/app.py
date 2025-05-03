@@ -3,250 +3,148 @@
 import os
 import google.generativeai as genai
 from flask import Flask, jsonify, request
-from flask_cors import CORS # Import CORS
+from flask_cors import CORS
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text, inspect, Column, Integer, String, MetaData
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 import certifi
 import traceback
 
-# Load environment variables from .env file
 load_dotenv()
 print("--- Flask app starting ---")
 
-# --- Database Setup ---
-DATABASE_URL = os.getenv("DATABASE_URL")
-print(f"--- Value read for DATABASE_URL: '{DATABASE_URL}' ---")
-
-engine = None
-SessionLocal = None
-Base = declarative_base()
-
-# Define Data Model - FAQ
-class FAQ(Base):
-    __tablename__ = 'faqs'
-    id = Column(Integer, primary_key=True, index=True)
-    question = Column(String, nullable=False, index=True)
-    answer = Column(String, nullable=False)
-
-# --- Separate function for seeding data ---
-def seed_data(db_session: Session):
-    try:
-        print(f"--- Attempting to seed initial data into '{FAQ.__tablename__}' table ---")
-        sample_faqs = [
-            {'question': 'מהן שעות הפעילות שלכם?', 'answer': 'אנחנו פתוחים בימים א-ה בין השעות 09:00 בבוקר ל-17:00 אחר הצהריים.'},
-            {'question': 'מה הכתובת של העסק?', 'answer': 'הכתובת שלנו היא רחוב הדוגמא 12, תל אביב.'},
-            {'question': 'איך אפשר ליצור קשר?', 'answer': 'ניתן ליצור קשר בטלפון 03-1234567 או במייל contact@example.com.'},
-            {'question': 'האם אתם פתוחים ביום שישי?', 'answer': 'לא, אנחנו סגורים בסופי שבוע (שישי ושבת).'}
-        ]
-        new_faqs = [FAQ(question=item['question'], answer=item['answer']) for item in sample_faqs]
-        db_session.add_all(new_faqs)
-        db_session.commit()
-        print(f"--- Successfully seeded {len(new_faqs)} FAQs ---")
-    except Exception as e_seed_commit:
-        print(f"Error during data seeding commit: {e_seed_commit}")
-        print(traceback.format_exc())
-        db_session.rollback()
-
-# --- Function to initialize DB (create table + call seed) ---
-def init_db():
-    if not engine or not SessionLocal:
-        print("--- Skipping DB init because engine or SessionLocal is None ---")
-        return
-    # Use a single session for init operations
+# --- Database Setup (ללא שינוי) ---
+DATABASE_URL = os.getenv("DATABASE_URL"); print(f"--- Value read for DATABASE_URL: '{DATABASE_URL}' ---"); engine = None; SessionLocal = None; Base = declarative_base()
+class FAQ(Base): __tablename__ = 'faqs'; id = Column(Integer, primary_key=True, index=True); question = Column(String, nullable=False, index=True); answer = Column(String, nullable=False)
+def seed_data(db_session: Session): #... (קוד seeding ללא שינוי)...
+    try: print(f"--- Attempting to seed initial data into '{FAQ.__tablename__}' table ---"); sample_faqs = [{'question': 'מהן שעות הפעילות שלכם?', 'answer': 'אנחנו פתוחים בימים א-ה בין השעות 09:00 בבוקר ל-17:00 אחר הצהריים.'}, {'question': 'מה הכתובת של העסק?', 'answer': 'הכתובת שלנו היא רחוב הדוגמא 12, תל אביב.'},{'question': 'איך אפשר ליצור קשר?', 'answer': 'ניתן ליצור קשר בטלפון 03-1234567 או במייל contact@example.com.'}, {'question': 'האם אתם פתוחים ביום שישי?', 'answer': 'לא, אנחנו סגורים בסופי שבוע (שישי ושבת).'}]; new_faqs = [FAQ(question=item['question'], answer=item['answer']) for item in sample_faqs]; db_session.add_all(new_faqs); db_session.commit(); print(f"--- Successfully seeded {len(new_faqs)} FAQs ---")
+    except Exception as e_seed_commit: print(f"Error during data seeding commit: {e_seed_commit}"); print(traceback.format_exc()); db_session.rollback()
+def init_db(): #... (קוד init_db ללא שינוי)...
+    if not engine or not SessionLocal: print("--- Skipping DB init because engine or SessionLocal is None ---"); return
     init_session: Session = SessionLocal()
-    try:
-        print(f"--- Checking if table '{FAQ.__tablename__}' exists... ---")
-        inspector = inspect(engine)
-        table_exists = inspector.has_table(FAQ.__tablename__)
-
-        if not table_exists:
-            print(f"--- Creating table '{FAQ.__tablename__}' ---")
-            Base.metadata.create_all(bind=engine)
-            print(f"--- Table '{FAQ.__tablename__}' created successfully ---")
-            # Seed after creating table
-            seed_data(init_session) # Use the existing session
-        else:
-            print(f"--- Table '{FAQ.__tablename__}' already exists ---")
-            # Check if existing table is empty and seed if needed
-            faq_count = init_session.query(FAQ).count()
-            print(f"--- Table '{FAQ.__tablename__}' exists with {faq_count} rows. ---")
-            if faq_count == 0:
-                 print("--- Table exists but is empty. Calling seed function. ---")
-                 seed_data(init_session) # Call the seeding function
-
-    except Exception as e_init:
-        print(f"Error during DB initialization (init_db function): {e_init}")
-        print(traceback.format_exc())
-    finally:
-         # Ensure session is always closed after init operations
-         init_session.close()
-
-# --- Attempt to create DB engine and Session ---
-if not DATABASE_URL:
-    print("CRITICAL ERROR: DATABASE_URL environment variable not set.")
+    try: print(f"--- Checking if table '{FAQ.__tablename__}' exists... ---"); inspector = inspect(engine); table_exists = inspector.has_table(FAQ.__tablename__)
+        if not table_exists: print(f"--- Creating table '{FAQ.__tablename__}' ---"); Base.metadata.create_all(bind=engine); print(f"--- Table '{FAQ.__tablename__}' created successfully ---"); seed_data(init_session)
+        else: print(f"--- Table '{FAQ.__tablename__}' already exists ---"); faq_count = init_session.query(FAQ).count(); print(f"--- Table '{FAQ.__tablename__}' exists with {faq_count} rows. ---");
+            if faq_count == 0: print("--- Table exists but is empty. Calling seed function. ---"); seed_data(init_session)
+    except Exception as e_init: print(f"Error during DB initialization (init_db function): {e_init}"); print(traceback.format_exc())
+    finally: init_session.close()
+if not DATABASE_URL: print("CRITICAL ERROR: DATABASE_URL environment variable not set.")
 else:
-    try:
-        # בלוק ה-try מכיל רק את יצירת ה-engine וה-SessionLocal
-        print(f"--- Attempting create_engine with URL: '{DATABASE_URL}' ---")
-        engine = create_engine(DATABASE_URL)
-        print(f"--- Database engine object CREATED: {engine} ---")
-        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-        print("--- SessionLocal created ---")
-    except Exception as e_engine:
-        # בלוק ה-except תופס שגיאות מה-try שלמעלה
-        print(f"ERROR during engine or SessionLocal creation: {e_engine}")
-        print(traceback.format_exc())
-        engine = None # Ensure engine is None if creation failed
-
-# --- Initialize DB (Call init_db only AFTER successful engine creation attempt) ---
-# מיקום נכון - אחרי ה-try-except של יצירת ה-engine
-if engine:
-   init_db()
-# --------------------------------------------------------------------
-
+    try: print(f"--- Attempting create_engine with URL: '{DATABASE_URL}' ---"); engine = create_engine(DATABASE_URL); print(f"--- Database engine object CREATED: {engine} ---"); SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine); print("--- SessionLocal created ---");
+        if engine: init_db() # <<--- מוודאים שזה פעיל
+    except Exception as e_engine: print(f"ERROR during engine or SessionLocal creation: {e_engine}"); print(traceback.format_exc()); engine = None
 print(f"--- After DB setup block, final engine state is: {engine} ---")
 # --- End Database Setup ---
-
 
 # --- Gemini API Setup ---
 google_api_key = None
 gemini_model = None
-chat_session = None # Initialize global chat session placeholder
+chat_session = None # <<<--- אובייקט השיחה הגלובלי שלנו
 try:
     google_api_key_from_env = os.getenv("GOOGLE_API_KEY")
-    if not google_api_key_from_env:
-        print("ERROR: GOOGLE_API_KEY environment variable not set.")
+    if not google_api_key_from_env: print("ERROR: GOOGLE_API_KEY environment variable not set.")
     else:
-        google_api_key = google_api_key_from_env
-        genai.configure(api_key=google_api_key)
-        model_name = 'gemini-2.0-flash' # Model that worked for user
-        gemini_model = genai.GenerativeModel(model_name)
+        google_api_key = google_api_key_from_env; genai.configure(api_key=google_api_key)
+        model_name = 'gemini-2.0-flash'; gemini_model = genai.GenerativeModel(model_name); # יוצרים את המודל
         print(f"--- Google Generative AI SDK configured with model: {model_name} ---")
-except Exception as e_sdk:
-    print(f"ERROR configuring Google Generative AI SDK or Model: {e_sdk}")
+except Exception as e_sdk: print(f"ERROR configuring Google Generative AI SDK or Model: {e_sdk}")
 # --- End Gemini API Setup ---
 
-
 # --- Prompt Template Setup ---
-DEFAULT_PROMPT_TEMPLATE = """
-ענה על שאלת המשתמש הבאה. אם המידע הנוסף המצורף מהשאלות הנפוצות רלוונטי לשאלה, השתמש בו בתשובתך. אם לא, ענה כמיטב יכולתך על בסיס הידע הכללי שלך.
-
-{context}
-
-שאלת המשתמש:
-{user_message}
-"""
-PROMPT_TEMPLATE = os.getenv("PROMPT_TEMPLATE", DEFAULT_PROMPT_TEMPLATE).strip()
-print(f"--- Using prompt template (loaded from env or default): ---\n{PROMPT_TEMPLATE[:200]}...")
+# (ללא שינוי)
+DEFAULT_PROMPT_TEMPLATE = "..."; PROMPT_TEMPLATE = os.getenv("PROMPT_TEMPLATE", DEFAULT_PROMPT_TEMPLATE).strip(); print(f"--- Using prompt template...")
 # --- End Prompt Template Setup ---
-
 
 # --- Flask App Initialization ---
 app = Flask(__name__)
-CORS(app) # Enable CORS for all routes
+CORS(app)
 print("--- Flask app object created and CORS enabled ---")
 # --- End Flask App Initialization ---
-
 
 # --- Final check print ---
 print("--- Flask routes definitions should be complete now ---")
 # -----------------------
 
-
 # --- Routes ---
 @app.route('/')
-def home():
-    print("--- Reached / route ---")
-    return "Hello from Chatbot Backend!"
-
+def home(): # ... (ללא שינוי) ...
+      print("--- Reached / route ---"); return "Hello from Chatbot Backend!"
 @app.route('/health')
-def health_check():
-    print("--- Reached /health route ---")
-    db_status = "OK" if engine and SessionLocal else "Error"
-    llm_status = "OK" if google_api_key and gemini_model else "Error"
-    return jsonify({
-        "status": "OK", "message": "Backend is running",
-        "db_connection": db_status, "llm_configured": llm_status
-    }), 200
-
+def health_check(): # ... (ללא שינוי) ...
+      print("--- Reached /health route ---"); db_status = "OK" if engine and SessionLocal else "Error"; llm_status = "OK" if google_api_key and gemini_model else "Error"; return jsonify({"status": "OK", "message": "Backend is running", "db_connection": db_status, "llm_configured": llm_status}), 200
 @app.route('/db-test')
-def db_test():
-    print(f"--- Reached /db-test route. Engine state: {engine} ---")
-    if not engine or not SessionLocal:
-        return jsonify({"status": "Error", "message": "Database connection not configured properly or engine is None."}), 500
+def db_test(): # ... (ללא שינוי) ...
+      print(f"--- Reached /db-test route. Engine state: {engine} ---");
+      if not engine or not SessionLocal: return jsonify({"status": "Error", "message": "Database connection not configured properly or engine is None."}), 500
+      db: Session = SessionLocal(); faq_count = -1
+      try: faq_count = db.query(FAQ).count(); return jsonify({"status": "OK", "message": f"DB Connection OK. Found {faq_count} FAQs."})
+      except Exception as e: print(f"Error during DB test query: {e}"); return jsonify({"status": "Error", "message": f"DB query failed: {str(e)}"}), 500
+      finally:
+          if 'db' in locals() and db: db.close()
 
-    db: Session = SessionLocal()
-    faq_count = -1 # Default error value
-    try:
-        faq_count = db.query(FAQ).count()
-        return jsonify({"status": "OK", "message": f"DB Connection OK. Found {faq_count} FAQs."})
-    except Exception as e:
-        print(f"Error during DB test query: {e}")
-        return jsonify({"status": "Error", "message": f"DB query failed: {str(e)}"}), 500
-    finally:
-        # Ensure session is always closed
-        if 'db' in locals() and db: # Check if db was successfully assigned
-             db.close()
-
+# --- נתיב API לטיפול בצ'אט - *** מעודכן חזרה לשיחה מתמשכת *** ---
 @app.route('/api/chat', methods=['POST'])
 def handle_chat():
-    # Using generate_content for now as a stable baseline
-    print(f"--- Reached /api/chat [POST]. ---")
+    global chat_session # <<<--- נאפשר גישה למשתנה הגלובלי
 
-    # 1. Parse User Input
-    try:
-        data = request.json
-        if not data or 'message' not in data: return jsonify({"error": "Missing 'message' in request body"}), 400
-        user_message = data['message']
-        print(f"Received message: {user_message}")
+    # 1. Parse User Input (ללא שינוי)
+    try: data = request.json; user_message = data['message'] if data and 'message' in data else None; print(f"Received message: {user_message}")
     except Exception as e: print(f"Error parsing request JSON: {e}"); return jsonify({"error": "Invalid request body"}), 400
+    if not user_message: return jsonify({"error": "Missing 'message' in request body"}), 400
 
-    # 2. Check Prerequisites
+    # 2. Check Prerequisites (ללא שינוי)
     if not google_api_key: return jsonify({"error": "Google API Key not configured"}), 500
     if not gemini_model: return jsonify({"error": "Gemini model not initialized"}), 500
 
-    # 3. RAG - Retrieve Context (DB Lookup)
-    context = "אין מידע נוסף מהמאגר."
-    retrieved_faqs = []
-    if engine and SessionLocal:
-        db: Session = SessionLocal()
+    # 3. Initialize Chat Session if needed <<<--- חזרנו לאתחל את השיחה
+    if chat_session is None:
         try:
-            print(f"--- Retrieving FAQs from DB for RAG ---"); retrieved_faqs = db.query(FAQ).all(); print(f"--- Retrieved {len(retrieved_faqs)} FAQs ---")
-            if retrieved_faqs:
-                context_list = []; [context_list.append(f"Q: {faq.question}\nA: {faq.answer}") for faq in retrieved_faqs]
-                context = "מידע רלוונטי מהשאלות הנפוצות:\n---\n" + "\n\n".join(context_list) + "\n---"
+            print("--- Starting new chat session ---")
+            chat_session = gemini_model.start_chat(history=[]) # מתחילים שיחה חדשה
+        except Exception as e_chat_start:
+             print(f"Error starting chat session: {e_chat_start}")
+             return jsonify({"error": "Failed to initialize chat session"}), 500
+
+    # 4. RAG - Retrieve Context (DB Lookup) (ללא שינוי)
+    # ... (קוד שליפת ההקשר מה-DB) ...
+    context = "אין מידע נוסף מהמאגר."; retrieved_faqs = []
+    if engine and SessionLocal:
+        db: Session = SessionLocal();
+        try: print(f"--- Retrieving FAQs from DB for RAG ---"); retrieved_faqs = db.query(FAQ).all(); print(f"--- Retrieved {len(retrieved_faqs)} FAQs ---")
+            if retrieved_faqs: context_list = []; [context_list.append(f"Q: {faq.question}\nA: {faq.answer}") for faq in retrieved_faqs]; context = "מידע רלוונטי:\n---\n" + "\n\n".join(context_list) + "\n---"
         except Exception as e_query: print(f"Error retrieving FAQs from DB: {e_query}")
         finally:
-            if 'db' in locals() and db: db.close() # Ensure session is closed
+            if 'db' in locals() and db: db.close()
     else: print("--- Skipping DB query because engine or SessionLocal is None ---")
 
-    # 4. Format Prompt using Template
-    try:
-        final_prompt = PROMPT_TEMPLATE.format(context=context, user_message=user_message)
-        print(f"--- Final prompt for Gemini:\n{final_prompt[:500]}...")
+
+    # 5. Format Prompt/Message (ללא שינוי מהגרסה שעבדה)
+    try: final_prompt = PROMPT_TEMPLATE.format(context=context, user_message=user_message); print(f"--- Final prompt for Gemini:\n{final_prompt[:500]}...")
     except Exception as e_format: print(f"Unexpected error formatting prompt: {e_format}"); return jsonify({"error": "Internal server error: prompt formatting failed."}), 500
 
-    # 5. Send to Gemini (Using generate_content for stability)
+    # 6. Send to Gemini via Chat Session <<<--- חזרנו ל-send_message
     llm_reply = "Error: LLM did not respond."
     try:
-        print("--- Sending SINGLE request to Gemini API using generate_content ---")
-        response = gemini_model.generate_content(final_prompt)
-        print("--- Received response from generate_content ---")
+        print("--- Sending message via chat.send_message() ---")
+        # משתמשים ב-send_message של אובייקט השיחה הפעיל
+        response = chat_session.send_message(final_prompt) # <<<--- שינוי כאן
+        print("--- Received response from chat session ---")
         if response.parts: llm_reply = response.text
-        elif response.candidates and response.candidates[0].finish_reason != 'STOP':
-             llm_reply = f"שגיאה: התגובה נחסמה או לא הושלמה. סיבה: {response.candidates[0].finish_reason}"; print(f"LLM response blocked or incomplete. Reason: {response.candidates[0].finish_reason}")
+        elif response.candidates and response.candidates[0].finish_reason != 'STOP': llm_reply = f"שגיאה: התגובה נחסמה או לא הושלמה. סיבה: {response.candidates[0].finish_reason}"; print(f"LLM response blocked or incomplete. Reason: {response.candidates[0].finish_reason}")
         else: llm_reply = "קיבלתי תשובה ריקה מהמודל."; print(f"Warning: Received potentially empty response from LLM. Full response object: {response}")
-    except Exception as e_send: print(f"Error calling generate_content: {e_send}"); return jsonify({"error": f"Failed to get response from LLM: {str(e_send)}"}), 500
 
-    # 6. Return Response
+    except Exception as e_send:
+        print(f"Error sending message via chat session: {e_send}")
+        chat_session = None # איפוס במקרה של שגיאה
+        return jsonify({"error": f"Failed to get response from LLM chat session: {str(e_send)}"}), 500
+
+    # 7. Return Response (ללא שינוי)
     return jsonify({'reply': llm_reply})
 # --- End Routes ---
 
 # --- Main execution block ---
+# (ללא שינוי)
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5001))
-    is_local_debug = os.getenv("RENDER") is None
-    # Use host='0.0.0.0' to be accessible within Render's network and potentially locally
+    port = int(os.environ.get("PORT", 5001)); is_local_debug = os.getenv("RENDER") is None
     app.run(debug=is_local_debug, port=port, host='0.0.0.0')
 # --- End Main execution block ---
