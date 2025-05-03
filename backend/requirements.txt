@@ -1,2 +1,7 @@
 Flask>=3.0.0
 Flask-Cors>=4.0.0
+python-dotenv>=1.0.0
+SQLAlchemy>=2.0.0
+psycopg2-binary>=2.9.0
+# certifi יגיע כתלות של ספריות אחרות בדרך כלל
+# google-generativeai וכו' לא נדרשים בשלב זה
